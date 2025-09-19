@@ -1,17 +1,16 @@
 #!/bin/bash
 
-# Linux 軟體包安裝器 - 統一分類管理系統
-# 支援交互式選擇與自動安裝各類軟體包
+# Linux 軟體包安裝器 v2 - 交互式版本
+# 統一分類管理系統，支援交互式選擇與安裝
 
 # 顏色定義
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # 打印帶顏色的訊息
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -19,7 +18,6 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_header() { echo -e "${BOLD}${CYAN}$1${NC}"; }
-
 
 # 檢查權限
 check_sudo() {
@@ -29,29 +27,7 @@ check_sudo() {
     fi
 }
 
-# 系統更新功能 (可選)
-update_system() {
-    print_info "更新軟體包列表..."
-    if sudo apt update; then
-        print_success "軟體包列表更新完成"
-    else
-        print_error "軟體包列表更新失敗"
-        return 1
-    fi
-}
-
-# 系統升級功能 (可選)
-upgrade_system() {
-    print_info "更新並升級系統..."
-    if sudo apt update && sudo apt upgrade -y; then
-        print_success "系統更新升級完成"
-    else
-        print_error "系統更新升級失敗"
-        return 1
-    fi
-}
-
-# 軟體包定義 - 格式: "package_name:description"
+# 軟體包定義
 declare -A packages
 
 # 1. 系統監控與性能工具
@@ -139,9 +115,7 @@ packages["gimp"]="圖像編輯軟體"
 packages["imagemagick"]="圖像處理命令行工具"
 
 # 8. 安全工具
-packages["ufw"]="簡易防火牆"
 packages["iptables"]="進階防火牆規則"
-packages["fail2ban"]="入侵防護系統"
 packages["chkrootkit"]="Rootkit 檢測工具"
 packages["rkhunter"]="Rootkit 獵手"
 packages["clamav"]="防毒軟體"
@@ -186,7 +160,7 @@ category_packages["development"]="nginx apache2 mariadb-server default-jdk pytho
 category_packages["database"]="postgresql postgresql-contrib redis-server mongodb sqlite3 mycli pgcli"
 category_packages["container"]="docker-compose kubectl virtualbox vagrant qemu-kvm libvirt-daemon"
 category_packages["multimedia"]="ffmpeg vlc audacity gimp imagemagick"
-category_packages["security"]="ufw iptables fail2ban chkrootkit rkhunter clamav lynis"
+category_packages["security"]="iptables chkrootkit rkhunter clamav lynis"
 category_packages["devops"]="terraform ansible awscli gcloud snapd"
 category_packages["utilities"]="tree jq zip unzip p7zip-full figlet fortune sl"
 
@@ -194,10 +168,10 @@ category_packages["utilities"]="tree jq zip unzip p7zip-full figlet fortune sl"
 show_main_menu() {
     clear
     print_header "=================================================="
-    print_header "          Linux 軟體包安裝管理系統"
+    print_header "          Linux 軟體包安裝管理系統 v2"
     print_header "=================================================="
     echo
-    echo "選擇安裝類別 (輸入數字或字母後按Enter)："
+    echo "選擇安裝類別："
     echo
     local i=1
     for category in monitoring management network development database container multimedia security devops utilities; do
@@ -215,7 +189,7 @@ show_main_menu() {
     echo -n "請選擇: "
 }
 
-# 顯示分類軟體包 (勾選模式)
+# 顯示分類軟體包（勾選模式）
 show_category_packages() {
     local category=$1
     local package_list=(${category_packages[$category]})
@@ -240,9 +214,9 @@ show_category_packages() {
             ((i++))
         done
         echo
-        echo "操作說明 (直接按鍵):"
-        echo " [1-9] 切換勾選     [A] 全選     [N] 全不選"
-        echo " [I] 安裝已勾選     [B] 返回     [Q] 退出"
+        echo "操作說明："
+        echo " 輸入數字切換勾選    [A] 全選    [N] 全不選"
+        echo " [I] 安裝已勾選      [B] 返回    [Q] 退出"
 
         if [ ${#selected_packages[@]} -gt 0 ]; then
             echo
@@ -251,17 +225,21 @@ show_category_packages() {
 
         echo
         echo -n "輸入選項: "
-        read choice
-        # 去除隱藏字符（回車符、空格等）
-        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+        read -r choice
 
         case $choice in
-            [1-9])
-                local idx=$choice
-                if [[ $idx -ge 1 && $idx -le ${#package_list[@]} ]]; then
-                    local pkg=${package_list[$((idx-1))]}
+            [0-9]*)
+                if [[ $choice =~ ^[0-9]+$ ]] && [ $choice -ge 1 ] && [ $choice -le ${#package_list[@]} ]; then
+                    local pkg=${package_list[$((choice-1))]}
                     if [[ " ${selected_packages[*]} " =~ " $pkg " ]]; then
-                        selected_packages=(${selected_packages[@]/$pkg})
+                        # 移除套件
+                        local temp_array=()
+                        for item in "${selected_packages[@]}"; do
+                            if [ "$item" != "$pkg" ]; then
+                                temp_array+=("$item")
+                            fi
+                        done
+                        selected_packages=("${temp_array[@]}")
                         print_info "取消勾選: $pkg"
                     else
                         selected_packages+=("$pkg")
@@ -327,8 +305,88 @@ show_all_packages() {
     done
 
     echo -n "按Enter鍵返回主選單..."
-    read
+    read -r
+}
+
+# 安裝軟體包
+install_packages() {
+    local package_list=("$@")
+
+    if [ ${#package_list[@]} -eq 0 ]; then
+        print_warning "沒有選擇任何軟體包"
+        return
+    fi
+
+    clear
+    print_header "軟體包安裝確認"
     echo
+    print_info "準備安裝以下軟體包："
+    for pkg in "${package_list[@]}"; do
+        echo "  - $pkg: ${packages[$pkg]}"
+    done
+    echo
+
+    echo -n "確認安裝? (y/N): "
+    read -r confirm
+    if [[ ! $confirm =~ ^[Yy]$ ]]; then
+        print_info "安裝已取消"
+        sleep 1
+        return
+    fi
+
+    echo
+    print_info "開始安裝軟體包..."
+
+    local success_count=0
+    local fail_count=0
+
+    for pkg in "${package_list[@]}"; do
+        print_info "正在安裝: $pkg"
+        if sudo apt install -y "$pkg" >/dev/null 2>&1; then
+            print_success "$pkg 安裝成功"
+            ((success_count++))
+        else
+            print_error "$pkg 安裝失敗"
+            ((fail_count++))
+        fi
+    done
+
+    echo
+    print_info "安裝完成統計："
+    print_success "成功: $success_count 個"
+    if [ $fail_count -gt 0 ]; then
+        print_error "失敗: $fail_count 個"
+    fi
+
+    echo
+    echo -n "按Enter鍵繼續..."
+    read -r
+}
+
+# 更新系統
+update_system() {
+    print_info "更新軟體包列表..."
+    if sudo apt update; then
+        print_success "軟體包列表更新完成"
+    else
+        print_error "軟體包列表更新失敗"
+        return 1
+    fi
+    echo -n "按Enter鍵繼續..."
+    read -r
+}
+
+# 系統升級功能
+upgrade_system() {
+    print_info "更新並升級系統..."
+    if sudo apt update && sudo apt upgrade -y; then
+        print_success "系統更新升級完成"
+    else
+        print_error "系統更新升級失敗"
+        return 1
+    fi
+    echo -n "按Enter鍵繼續..."
+    read -r
 }
 
 # 搜尋軟體包
@@ -336,13 +394,13 @@ search_packages() {
     clear
     print_header "軟體包搜尋"
     echo
-    read -p "輸入搜尋關鍵字: " keyword
+    echo -n "輸入搜尋關鍵字: "
+    read -r keyword
 
     if [[ -z "$keyword" ]]; then
         print_warning "搜尋關鍵字不能為空"
         echo -n "按Enter鍵返回..."
-        read
-        echo
+        read -r
         return
     fi
 
@@ -366,66 +424,10 @@ search_packages() {
 
     echo
     echo -n "按Enter鍵返回主選單..."
-    read
-    echo
+    read -r
 }
 
-# 安裝軟體包
-install_packages() {
-    local package_list=("$@")
-
-    if [ ${#package_list[@]} -eq 0 ]; then
-        print_warning "沒有選擇任何軟體包"
-        return
-    fi
-
-    clear
-    print_header "軟體包安裝確認"
-    echo
-    print_info "準備安裝以下軟體包："
-    for pkg in "${package_list[@]}"; do
-        echo "  - $pkg: ${packages[$pkg]}"
-    done
-    echo
-
-    read -p "確認安裝? (y/N): " confirm
-    if [[ ! $confirm =~ ^[Yy]$ ]]; then
-        print_info "安裝已取消"
-        return
-    fi
-
-    echo
-    print_info "開始安裝軟體包..."
-
-    local success_count=0
-    local fail_count=0
-
-    for pkg in "${package_list[@]}"; do
-        print_info "正在安裝: $pkg"
-        if sudo apt install -y "$pkg" &>/dev/null; then
-            print_success "$pkg 安裝成功"
-            ((success_count++))
-        else
-            print_error "$pkg 安裝失敗"
-            ((fail_count++))
-        fi
-    done
-
-    echo
-    print_info "安裝完成統計："
-    print_success "成功: $success_count 個"
-    if [ $fail_count -gt 0 ]; then
-        print_error "失敗: $fail_count 個"
-    fi
-
-    echo
-    echo -n "按Enter鍵繼續..."
-    read
-    echo
-}
-
-
-# 自定義選擇 (快捷鍵勾選模式)
+# 自定義選擇
 custom_selection() {
     local all_packages=()
     local selected_packages=()
@@ -468,11 +470,11 @@ custom_selection() {
         done
 
         echo
-        echo "操作說明 (直接按鍵):"
-        echo " [1-9] 切換勾選       [A] 本頁全選     [N] 本頁全不選"
+        echo "操作說明："
+        echo " 輸入數字切換勾選    [A] 本頁全選     [N] 本頁全不選"
         echo " [>] 下一頁          [<] 上一頁       [P] 跳到指定頁"
-        echo " [I] 安裝已勾選       [C] 清除所有勾選  [S] 搜尋"
-        echo " [B] 返回主選單       [Q] 退出"
+        echo " [I] 安裝已勾選      [C] 清除所有勾選  [S] 搜尋"
+        echo " [B] 返回主選單      [Q] 退出"
 
         if [ ${#selected_packages[@]} -gt 0 ]; then
             echo
@@ -481,18 +483,22 @@ custom_selection() {
 
         echo
         echo -n "輸入選項: "
-        read choice
-        # 去除隱藏字符（回車符、空格等）
-        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+        read -r choice
 
         case $choice in
-            [1-9])
-                local idx=$choice
-                local actual_idx=$((start + idx - 1))
-                if [[ $actual_idx -ge $start && $actual_idx -le $end ]]; then
+            [0-9]*)
+                if [[ $choice =~ ^[0-9]+$ ]] && [ $choice -ge 1 ] && [ $choice -le $((end - start + 1)) ]; then
+                    local actual_idx=$((start + choice - 1))
                     local pkg=${all_packages[$actual_idx]}
                     if [[ " ${selected_packages[*]} " =~ " $pkg " ]]; then
-                        selected_packages=(${selected_packages[@]/$pkg})
+                        # 移除套件
+                        local temp_array=()
+                        for item in "${selected_packages[@]}"; do
+                            if [ "$item" != "$pkg" ]; then
+                                temp_array+=("$item")
+                            fi
+                        done
+                        selected_packages=("${temp_array[@]}")
                         print_info "取消勾選: $pkg"
                     else
                         selected_packages+=("$pkg")
@@ -517,7 +523,14 @@ custom_selection() {
             [nN])
                 for i in $(seq $start $end); do
                     local pkg=${all_packages[$i]}
-                    selected_packages=(${selected_packages[@]/$pkg})
+                    # 移除套件
+                    local temp_array=()
+                    for item in "${selected_packages[@]}"; do
+                        if [ "$item" != "$pkg" ]; then
+                            temp_array+=("$item")
+                        fi
+                    done
+                    selected_packages=("${temp_array[@]}")
                 done
                 print_info "已取消本頁所有勾選"
                 sleep 1
@@ -540,7 +553,8 @@ custom_selection() {
                 ;;
             [pP])
                 echo
-                read -p "跳到第幾頁 (1-$total_pages): " target_page
+                echo -n "跳到第幾頁 (1-$total_pages): "
+                read -r target_page
                 if [[ $target_page =~ ^[0-9]+$ ]] && [[ $target_page -ge 1 && $target_page -le $total_pages ]]; then
                     page=$target_page
                 else
@@ -580,12 +594,6 @@ custom_selection() {
     done
 }
 
-# 處理分類選擇 (直接進入勾選模式)
-handle_category() {
-    local category=$1
-    show_category_packages "$category"
-}
-
 # 主程序
 main() {
     # 檢查權限
@@ -594,37 +602,24 @@ main() {
     # 主循環
     while true; do
         show_main_menu
-        echo -n "輸入選項: "
-        read choice
-        # 去除隱藏字符（回車符、空格等）
-        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+        read -r choice
 
         case $choice in
-            "1") handle_category "monitoring" ;;
-            "2") handle_category "management" ;;
-            "3") handle_category "network" ;;
-            "4") handle_category "development" ;;
-            "5") handle_category "database" ;;
-            "6") handle_category "container" ;;
-            "7") handle_category "multimedia" ;;
-            "8") handle_category "security" ;;
-            "9") handle_category "devops" ;;
-            "0") handle_category "utilities" ;;
+            "1") show_category_packages "monitoring" ;;
+            "2") show_category_packages "management" ;;
+            "3") show_category_packages "network" ;;
+            "4") show_category_packages "development" ;;
+            "5") show_category_packages "database" ;;
+            "6") show_category_packages "container" ;;
+            "7") show_category_packages "multimedia" ;;
+            "8") show_category_packages "security" ;;
+            "9") show_category_packages "devops" ;;
+            "0") show_category_packages "utilities" ;;
             [aA]) show_all_packages ;;
             [cC]) custom_selection ;;
             [sS]) search_packages ;;
-            [uU])
-                update_system
-                echo -n "按Enter鍵繼續..."
-                read
-                echo
-                ;;
-            [gG])
-                upgrade_system
-                echo -n "按Enter鍵繼續..."
-                read
-                echo
-                ;;
+            [uU]) update_system ;;
+            [gG]) upgrade_system ;;
             [qQ])
                 print_success "感謝使用 Linux 軟體包安裝管理系統！"
                 exit 0

@@ -1,17 +1,16 @@
 #!/bin/bash
 
-# 我的常用庫 APT 安裝器
-# 基於 /home/wing/下載/我的常用庫.md 的套件清單
+# 我的常用庫 APT 安裝器 v2 - 交互式版本
+# 基於常用套件清單的交互式安裝器
 
 # 顏色定義
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # 打印帶顏色的訊息
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -25,17 +24,6 @@ check_sudo() {
     if ! sudo -v &>/dev/null; then
         print_error "需要sudo權限才能安裝軟體包"
         exit 1
-    fi
-}
-
-# 系統更新
-update_system() {
-    print_info "更新軟體包列表..."
-    if sudo apt update; then
-        print_success "軟體包列表更新完成"
-    else
-        print_error "軟體包列表更新失敗"
-        return 1
     fi
 }
 
@@ -200,33 +188,28 @@ category_packages["security"]="gpg openssl"
 category_packages["terminal"]="tmuxinator"
 category_packages["sysinfo"]="hwinfo"
 
-
 # 顯示主選單
 show_main_menu() {
     clear
     print_header "=================================================="
-    print_header "           我的常用庫 APT 安裝器"
+    print_header "           我的常用庫 APT 安裝器 v2"
     print_header "=================================================="
     echo
-    echo "選擇安裝類別 (輸入數字或字母後按Enter)："
+    echo "選擇安裝類別："
     echo
-    echo " [1] ${categories[monitoring]}"
-    echo " [2] ${categories[system]}"
-    echo " [3] ${categories[server]}"
-    echo " [4] ${categories[database]}"
-    echo " [5] ${categories[services]}"
-    echo " [6] ${categories[network]}"
-    echo " [7] ${categories[development]}"
-    echo " [8] ${categories[container]}"
-    echo " [9] ${categories[multimedia]}"
-    echo " [0] ${categories[devops]}"
+    local i=1
+    for category in monitoring system server database services network development container multimedia devops filetools security terminal sysinfo; do
+        echo " [$i] ${categories[$category]}"
+        ((i++))
+    done
+    echo
     echo
     echo " [A] ${categories[filetools]}"
     echo " [B] ${categories[security]}"
     echo " [C] ${categories[terminal]}"
     echo " [D] ${categories[sysinfo]}"
     echo
-    echo " [L] 列出所有套件"
+    echo " [L] 顯示所有套件"
     echo " [I] 安裝所有套件"
     echo " [U] 更新系統"
     echo " [Q] 退出"
@@ -234,60 +217,107 @@ show_main_menu() {
     echo -n "請選擇: "
 }
 
-# 顯示分類軟體包
+# 顯示分類軟體包（勾選模式）
 show_category_packages() {
     local category=$1
     local package_list=(${category_packages[$category]})
+    local selected_packages=()
 
-    clear
-    print_header "=================================================="
-    print_header "     ${categories[$category]} - 套件列表"
-    print_header "=================================================="
-    echo
+    while true; do
+        clear
+        print_header "=================================================="
+        print_header "     ${categories[$category]} - 勾選模式"
+        print_header "=================================================="
+        echo
 
-    local i=1
-    for pkg in "${package_list[@]}"; do
-        if [[ -n "${my_packages[$pkg]}" ]]; then
-            printf " %2d) %-18s - %s\n" $i "$pkg" "${my_packages[$pkg]}"
+        local i=1
+        for pkg in "${package_list[@]}"; do
+            if [[ -n "${my_packages[$pkg]}" ]]; then
+                local mark=" "
+                if [[ " ${selected_packages[*]} " =~ " $pkg " ]]; then
+                    mark="✓"
+                fi
+                printf " [%s] %2d) %-18s - %s\n" "$mark" $i "$pkg" "${my_packages[$pkg]}"
+            fi
             ((i++))
+        done
+        echo
+        echo "操作說明："
+        echo " 輸入數字切換勾選    [A] 全選    [N] 全不選"
+        echo " [I] 安裝已勾選      [B] 返回    [Q] 退出"
+
+        if [ ${#selected_packages[@]} -gt 0 ]; then
+            echo
+            print_info "已勾選 ${#selected_packages[@]} 個套件"
         fi
+
+        echo
+        echo -n "輸入選項: "
+        read -r choice
+
+        case $choice in
+            [0-9]*)
+                if [[ $choice =~ ^[0-9]+$ ]] && [ $choice -ge 1 ] && [ $choice -le ${#package_list[@]} ]; then
+                    local pkg=${package_list[$((choice-1))]}
+                    if [[ " ${selected_packages[*]} " =~ " $pkg " ]]; then
+                        # 移除套件
+                        local temp_array=()
+                        for item in "${selected_packages[@]}"; do
+                            if [ "$item" != "$pkg" ]; then
+                                temp_array+=("$item")
+                            fi
+                        done
+                        selected_packages=("${temp_array[@]}")
+                        print_info "取消勾選: $pkg"
+                    else
+                        selected_packages+=("$pkg")
+                        print_success "已勾選: $pkg"
+                    fi
+                    sleep 0.5
+                else
+                    print_error "無效選項: $choice"
+                    sleep 1
+                fi
+                ;;
+            [aA])
+                selected_packages=("${package_list[@]}")
+                print_success "已全選所有套件"
+                sleep 1
+                ;;
+            [nN])
+                selected_packages=()
+                print_info "已取消所有勾選"
+                sleep 1
+                ;;
+            [iI])
+                if [ ${#selected_packages[@]} -gt 0 ]; then
+                    install_packages "${selected_packages[@]}"
+                    return
+                else
+                    print_warning "尚未勾選任何套件"
+                    sleep 1
+                fi
+                ;;
+            [bB])
+                return
+                ;;
+            [qQ])
+                print_success "感謝使用！"
+                exit 0
+                ;;
+            *)
+                print_error "無效選項: $choice"
+                sleep 1
+                ;;
+        esac
     done
-
-    echo
-    echo "操作選項："
-    echo " [I] 安裝此類別所有套件"
-    echo " [B] 返回主選單"
-    echo " [Q] 退出"
-    echo
-    echo -n "輸入選項: "
-    read choice
-    # 去除隱藏字符（回車符、空格等）
-    choice=$(echo "$choice" | tr -d '\r\n' | xargs)
-
-    case $choice in
-        [iI])
-            install_packages "${package_list[@]}"
-            ;;
-        [bB])
-            return
-            ;;
-        [qQ])
-            print_success "感謝使用！"
-            exit 0
-            ;;
-        *)
-            print_error "無效選項: $choice"
-            sleep 1
-            show_category_packages "$category"
-            ;;
-    esac
 }
 
 # 顯示所有軟體包
 show_all_packages() {
     clear
     print_header "=================================================="
-    print_header "              所有可用軟體包"
+    print_header "              所有可用套件"
     print_header "=================================================="
     echo
 
@@ -303,8 +333,7 @@ show_all_packages() {
     done
 
     echo -n "按Enter鍵返回主選單..."
-    read_char
-    echo
+    read -r
 }
 
 # 安裝軟體包
@@ -312,14 +341,14 @@ install_packages() {
     local package_list=("$@")
 
     if [ ${#package_list[@]} -eq 0 ]; then
-        print_warning "沒有選擇任何軟體包"
+        print_warning "沒有選擇任何套件"
         return
     fi
 
     clear
-    print_header "軟體包安裝確認"
+    print_header "套件安裝確認"
     echo
-    print_info "準備安裝以下軟體包："
+    print_info "準備安裝以下套件："
     for pkg in "${package_list[@]}"; do
         if [[ -n "${my_packages[$pkg]}" ]]; then
             echo "  - $pkg: ${my_packages[$pkg]}"
@@ -329,7 +358,8 @@ install_packages() {
     done
     echo
 
-    read -p "確認安裝? (y/N): " confirm
+    echo -n "確認安裝? (y/N): "
+    read -r confirm
     if [[ ! $confirm =~ ^[Yy]$ ]]; then
         print_info "安裝已取消"
         sleep 1
@@ -337,14 +367,14 @@ install_packages() {
     fi
 
     echo
-    print_info "開始安裝軟體包..."
+    print_info "開始安裝套件..."
 
     local success_count=0
     local fail_count=0
 
     for pkg in "${package_list[@]}"; do
         print_info "正在安裝: $pkg"
-        if sudo apt install -y "$pkg" &>/dev/null; then
+        if sudo apt install -y "$pkg" >/dev/null 2>&1; then
             print_success "$pkg 安裝成功"
             ((success_count++))
         else
@@ -362,8 +392,7 @@ install_packages() {
 
     echo
     echo -n "按Enter鍵繼續..."
-    read_char
-    echo
+    read -r
 }
 
 # 安裝所有套件
@@ -382,10 +411,16 @@ install_all_packages() {
     install_packages "${all_packages[@]}"
 }
 
-# 處理分類選擇
-handle_category() {
-    local category=$1
-    show_category_packages "$category"
+# 更新系統
+update_system() {
+    print_info "更新軟體包列表..."
+    if sudo apt update; then
+        print_success "軟體包列表更新完成"
+    else
+        print_error "軟體包列表更新失敗"
+    fi
+    echo -n "按Enter鍵繼續..."
+    read -r
 }
 
 # 主程序
@@ -396,34 +431,26 @@ main() {
     # 主循環
     while true; do
         show_main_menu
-        echo -n "輸入選項: "
-        read choice
-        # 去除隱藏字符（回車符、空格等）
-        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+        read -r choice
 
         case $choice in
-            "1") handle_category "monitoring" ;;
-            "2") handle_category "system" ;;
-            "3") handle_category "server" ;;
-            "4") handle_category "database" ;;
-            "5") handle_category "services" ;;
-            "6") handle_category "network" ;;
-            "7") handle_category "development" ;;
-            "8") handle_category "container" ;;
-            "9") handle_category "multimedia" ;;
-            "0") handle_category "devops" ;;
-            [aA]) handle_category "filetools" ;;
-            [bB]) handle_category "security" ;;
-            [cC]) handle_category "terminal" ;;
-            [dD]) handle_category "sysinfo" ;;
+            "1") show_category_packages "monitoring" ;;
+            "2") show_category_packages "system" ;;
+            "3") show_category_packages "server" ;;
+            "4") show_category_packages "database" ;;
+            "5") show_category_packages "services" ;;
+            "6") show_category_packages "network" ;;
+            "7") show_category_packages "development" ;;
+            "8") show_category_packages "container" ;;
+            "9") show_category_packages "multimedia" ;;
+            "0") show_category_packages "devops" ;;
+            [aA]) show_category_packages "filetools" ;;
+            [bB]) show_category_packages "security" ;;
+            [cC]) show_category_packages "terminal" ;;
+            [dD]) show_category_packages "sysinfo" ;;
             [lL]) show_all_packages ;;
             [iI]) install_all_packages ;;
-            [uU])
-                update_system
-                echo -n "按Enter鍵繼續..."
-                read_char
-                echo
-                ;;
+            [uU]) update_system ;;
             [qQ])
                 print_success "感謝使用我的常用庫 APT 安裝器！"
                 exit 0
