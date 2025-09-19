@@ -20,12 +20,6 @@ print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_header() { echo -e "${BOLD}${CYAN}$1${NC}"; }
 
-# 讀取單個字符 (無需按Enter)
-read_char() {
-    local char
-    IFS= read -rsn1 char
-    echo "$char"
-}
 
 # 檢查權限
 check_sudo() {
@@ -203,7 +197,7 @@ show_main_menu() {
     print_header "          Linux 軟體包安裝管理系統"
     print_header "=================================================="
     echo
-    echo "選擇安裝類別 (直接按對應按鍵)："
+    echo "選擇安裝類別 (輸入數字或字母後按Enter)："
     echo
     local i=1
     for category in monitoring management network development database container multimedia security devops utilities; do
@@ -256,14 +250,14 @@ show_category_packages() {
         fi
 
         echo
-        echo -n "請選擇: "
-
-        local choice=$(read_char)
-        echo "$choice"
+        echo -n "輸入選項: "
+        read choice
+        # 去除隱藏字符（回車符、空格等）
+        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
 
         case $choice in
             [1-9])
-                local idx=$((choice))
+                local idx=$choice
                 if [[ $idx -ge 1 && $idx -le ${#package_list[@]} ]]; then
                     local pkg=${package_list[$((idx-1))]}
                     if [[ " ${selected_packages[*]} " =~ " $pkg " ]]; then
@@ -332,8 +326,8 @@ show_all_packages() {
         echo
     done
 
-    echo -n "按任意鍵返回主選單..."
-    read_char
+    echo -n "按Enter鍵返回主選單..."
+    read
     echo
 }
 
@@ -346,8 +340,8 @@ search_packages() {
 
     if [[ -z "$keyword" ]]; then
         print_warning "搜尋關鍵字不能為空"
-        echo -n "按任意鍵返回..."
-        read_char
+        echo -n "按Enter鍵返回..."
+        read
         echo
         return
     fi
@@ -371,8 +365,8 @@ search_packages() {
     fi
 
     echo
-    echo -n "按任意鍵返回主選單..."
-    read_char
+    echo -n "按Enter鍵返回主選單..."
+    read
     echo
 }
 
@@ -425,8 +419,8 @@ install_packages() {
     fi
 
     echo
-    echo -n "按任意鍵繼續..."
-    read_char
+    echo -n "按Enter鍵繼續..."
+    read
     echo
 }
 
@@ -486,14 +480,14 @@ custom_selection() {
         fi
 
         echo
-        echo -n "請選擇: "
-
-        local choice=$(read_char)
-        echo "$choice"
+        echo -n "輸入選項: "
+        read choice
+        # 去除隱藏字符（回車符、空格等）
+        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
 
         case $choice in
             [1-9])
-                local idx=$((choice))
+                local idx=$choice
                 local actual_idx=$((start + idx - 1))
                 if [[ $actual_idx -ge $start && $actual_idx -le $end ]]; then
                     local pkg=${all_packages[$actual_idx]}
@@ -600,33 +594,35 @@ main() {
     # 主循環
     while true; do
         show_main_menu
-        local choice=$(read_char)
-        echo "$choice"
+        echo -n "輸入選項: "
+        read choice
+        # 去除隱藏字符（回車符、空格等）
+        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
 
         case $choice in
-            1) handle_category "monitoring" ;;
-            2) handle_category "management" ;;
-            3) handle_category "network" ;;
-            4) handle_category "development" ;;
-            5) handle_category "database" ;;
-            6) handle_category "container" ;;
-            7) handle_category "multimedia" ;;
-            8) handle_category "security" ;;
-            9) handle_category "devops" ;;
-            0) handle_category "utilities" ;;
+            "1") handle_category "monitoring" ;;
+            "2") handle_category "management" ;;
+            "3") handle_category "network" ;;
+            "4") handle_category "development" ;;
+            "5") handle_category "database" ;;
+            "6") handle_category "container" ;;
+            "7") handle_category "multimedia" ;;
+            "8") handle_category "security" ;;
+            "9") handle_category "devops" ;;
+            "0") handle_category "utilities" ;;
             [aA]) show_all_packages ;;
             [cC]) custom_selection ;;
             [sS]) search_packages ;;
             [uU])
                 update_system
-                echo -n "按任意鍵繼續..."
-                read_char
+                echo -n "按Enter鍵繼續..."
+                read
                 echo
                 ;;
             [gG])
                 upgrade_system
-                echo -n "按任意鍵繼續..."
-                read_char
+                echo -n "按Enter鍵繼續..."
+                read
                 echo
                 ;;
             [qQ])
